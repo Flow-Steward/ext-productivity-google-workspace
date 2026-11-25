@@ -6,6 +6,7 @@ from action_envelope import is_valid_action_envelope
 from drive.transport import DriveTransport
 
 from .errors import SheetsExtensionError
+from .queue import transition_google_sheet_row, validated_queue_input
 from .reads import read_google_sheet
 from .transport import SheetsTransport
 from .validation import access_token, validated_read_input
@@ -17,7 +18,14 @@ from .writes import (
     write_google_sheet,
 )
 
-OPERATION_IDS = frozenset({"read_google_sheet", "write_google_sheet", "append_google_sheet_rows"})
+OPERATION_IDS = frozenset(
+    {
+        "read_google_sheet",
+        "write_google_sheet",
+        "append_google_sheet_rows",
+        "transition_google_sheet_row",
+    }
+)
 
 
 def handle_runtime(payload: dict[str, Any]) -> dict[str, Any]:
@@ -27,11 +35,14 @@ def handle_runtime(payload: dict[str, Any]) -> dict[str, Any]:
             operation_input = validated_read_input(raw_input)
         elif operation_id == "write_google_sheet":
             operation_input = validated_write_input(raw_input)
-        else:
+        elif operation_id == "append_google_sheet_rows":
             operation_input = validated_append_input(raw_input)
+        else:
+            operation_input = validated_queue_input(raw_input)
         if operation_id != "read_google_sheet" and _test_mode(payload):
-            with row_source(payload, operation_input) as source:
-                source.validate_batches()
+            if operation_id != "transition_google_sheet_row":
+                with row_source(payload, operation_input) as source:
+                    source.validate_batches()
             return _suppressed()
         connection_ref = operation_input["connection_ref"]
         token = access_token(payload, connection_ref=connection_ref)
@@ -42,8 +53,10 @@ def handle_runtime(payload: dict[str, Any]) -> dict[str, Any]:
             result = write_google_sheet(
                 sheets_transport, DriveTransport(token), payload, operation_input
             )
-        else:
+        elif operation_id == "append_google_sheet_rows":
             result = append_google_sheet_rows(sheets_transport, payload, operation_input)
+        else:
+            result = transition_google_sheet_row(sheets_transport, payload, operation_input)
         response = {
             "ok": True,
             "result": result,

@@ -9,7 +9,7 @@ def test_operator_readme_documents_drive_sheets_security_and_lifecycle() -> None
     readme = (BUNDLE_ROOT / "README.md").read_text()
 
     for required in (
-        "version 0.3.7",
+        "version 0.4.1",
         "https://www.googleapis.com/auth/gmail.modify",
         "https://www.googleapis.com/auth/drive.file",
         "https://www.googleapis.com/auth/userinfo.email",
@@ -56,6 +56,7 @@ def test_operator_readme_lists_exact_drive_and_sheets_operations_and_non_goals()
         "read_google_sheet",
         "write_google_sheet",
         "append_google_sheet_rows",
+        "transition_google_sheet_row",
     ):
         assert f"`{operation_id}`" in readme
     for non_goal in (

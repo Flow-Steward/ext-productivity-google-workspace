@@ -1,0 +1,26 @@
+page_id: gmail-triggers
+title: Gmail triggers
+description: Choose which Gmail accounts can start workflows when new mail arrives.
+connection:
+  connection_type_ids: [google_gmail_account]
+components:
+  - component_id: gmail_trigger_settings
+    type: form
+    title: New email trigger
+    description: Enable this for the selected account, then add the New Gmail email trigger to a workflow and use this Gmail connection ID.
+    ui_schema:
+      version: '1'
+      type: form_ui
+      fields:
+        - field_id: gmail_trigger_mode
+          path: gmail_trigger_mode
+          widget: select
+          label: Set trigger to
+          props:
+            options:
+              - {label: 'Off', value: 'off'}
+              - {label: 'On', value: polling}
+    data:
+      load_query: get_gmail_trigger_settings
+      save_action: save_gmail_trigger_settings
+      save_mode: patch

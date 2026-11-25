@@ -56,9 +56,9 @@ class GmailTransport:
             raise GmailExtensionError("invalid_payload", "Invalid Gmail API path")
         url = f"{GMAIL_API_ORIGIN}{normalized_path}"
         if query:
-            pairs = [(str(key), str(value)) for key, value in query.items() if value is not None]
+            pairs = [(str(key), value) for key, value in query.items() if value is not None]
             if pairs:
-                url = f"{url}?{urlencode(pairs)}"
+                url = f"{url}?{urlencode(pairs, doseq=True)}"
         parsed = urlparse(url)
         if parsed.scheme != "https" or parsed.hostname != "gmail.googleapis.com":
             raise GmailExtensionError("invalid_payload", "Invalid Gmail API origin")
@@ -150,6 +150,34 @@ class GmailTransport:
             query=query,
             response_limit=SEARCH_RESPONSE_LIMIT,
             purpose="Gmail message search",
+        )
+
+    def message_history(self, history_id: str, page_token: str | None) -> dict[str, Any]:
+        return self.request_json(
+            "GET",
+            "/gmail/v1/users/me/history",
+            query={
+                "startHistoryId": history_id,
+                "pageToken": page_token,
+                "maxResults": 20,
+                "historyTypes": "messageAdded",
+                "fields": "historyId,nextPageToken,history(messagesAdded(message(id)))",
+            },
+            response_limit=SEARCH_RESPONSE_LIMIT,
+            purpose="Gmail message history",
+        )
+
+    def message_metadata(self, message_id: str) -> dict[str, Any]:
+        return self.request_json(
+            "GET",
+            f"/gmail/v1/users/me/messages/{quote(message_id, safe='')}",
+            query={
+                "format": "metadata",
+                "metadataHeaders": ("From", "Subject"),
+                "fields": "id,threadId,labelIds,internalDate,payload(headers)",
+            },
+            response_limit=PROFILE_RESPONSE_LIMIT,
+            purpose="Gmail message metadata",
         )
 
     def message(self, message_id: str) -> dict[str, Any]:

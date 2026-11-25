@@ -5,6 +5,7 @@ import json
 from datetime import UTC, datetime, timedelta
 from email.utils import format_datetime
 from urllib.error import HTTPError, URLError
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 from gmail.errors import GmailExtensionError
@@ -139,3 +140,19 @@ def test_http_408_after_post_is_an_ambiguous_mutation_timeout() -> None:
 
     assert error.code == "timeout_unknown"
     assert error.ambiguous is True
+
+
+def test_trigger_reads_only_sender_and_subject_headers() -> None:
+    urls = []
+
+    def opened(request, **_kwargs):
+        urls.append(request.full_url)
+        return io.BytesIO(b"{}")
+
+    GmailTransport("token", opener=opened).message_metadata("gmail-message")
+
+    url = urlsplit(urls[0])
+    assert url.path.endswith("/messages/gmail-message")
+    query = parse_qs(url.query)
+    assert query["format"] == ["metadata"]
+    assert query["metadataHeaders"] == ["From", "Subject"]

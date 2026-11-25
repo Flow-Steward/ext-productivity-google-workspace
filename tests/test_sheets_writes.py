@@ -247,6 +247,23 @@ def test_overwrite_clears_greater_old_or_incoming_rectangle_then_writes_raw() ->
     assert result["sheet_id"] == 123
 
 
+def test_update_writes_only_the_supplied_status_cell_without_clearing() -> None:
+    from sheets.writes import write_google_sheet
+
+    sheets = SheetsMutationTransport()
+    sheets.old_values = [["Ready", "keep this"], ["Pending", "keep this too"]]
+    drive = DriveCreateTransport()
+
+    result = write_google_sheet(
+        sheets, drive, _runtime(), _overwrite_input(mode="update", inline_rows=[["Done"]])
+    )
+
+    assert sheets.clears == []
+    assert sheets.updates == [("spreadsheet-1", "'Inventory'!B2:B2", [["Done"]], "RAW")]
+    assert drive.creates == []
+    assert (result["row_count"], result["column_count"]) == (1, 1)
+
+
 def test_append_checks_chunk_marker_and_commits_cells_plus_marker_atomically() -> None:
     from sheets.writes import append_google_sheet_rows
 

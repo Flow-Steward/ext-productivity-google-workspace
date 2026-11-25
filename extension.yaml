@@ -2,7 +2,7 @@ manifest_version: 2
 lifecycle: {data_schema_version: 1, data_migrations: []}
 extension_id: flowsteward.google-workspace
 kind: tool_provider
-version: 0.3.7
+version: 0.4.3
 display_name: Google Workspace
 description: |-
   Google Workspace connects Gmail, Google Drive and Google Sheets to Flow Steward workflows. Search and read Gmail messages, retrieve attachments, organize messages with labels, change read or starred flags and move messages to trash. Search Drive files available to the app, download files or supported native exports, and upload workflow files to a selected folder. Read a Sheets range into a dataset, create a spreadsheet, replace a selected rectangle or append rows to a table.
@@ -19,6 +19,33 @@ listing:
   setup_summary: |-
     Configure a Google Cloud OAuth Web application, enable the required service APIs, register Flow Steward’s callback URL and save the Client ID and Client Secret in the project Setup guide. Authorize each service connection separately; add restricted Picker credentials and a trusted origin if you want interactive file selection.
 features: [tool, action]
+event_subscriptions:
+  - {event_type: google_workspace.gmail.message.received, severity: any, conditions: {}}
+workflow_triggers:
+  - trigger_type_id: message_received
+    provider_key: flowsteward.google-workspace
+    display_name: New Gmail email
+    description: Starts the workflow for each new message in the Inbox of one Gmail connection after its first check. Enable the trigger for that connection in Gmail triggers. Use the message ID in a Gmail step to read the email or its attachments.
+    event_name: google_workspace.gmail.message.received
+    config_schema:
+      type: object
+      additionalProperties: false
+      required: [connection_id]
+      properties:
+        connection_id: {type: string, title: Gmail connection, minLength: 1}
+        from: {type: string, title: Sender address}
+    ui_schema:
+      fields:
+        - name: connection_id
+          label: Gmail connection
+          widget_type: text
+          required: true
+          help_text: Copy the Gmail connection ID from the Gmail triggers tab.
+        - name: from
+          label: Sender address
+          widget_type: text
+          placeholder: invoices@example.com
+          help_text: Enter the exact sender address in lowercase, or leave this blank for every sender.
 required_scopes: [extension:invoke, artifact:read, artifact:write]
 account_scope:
   scope_type: project
@@ -30,8 +57,15 @@ external_effects:
   - {operation_id: upload_drive_file, effect_kind: drive_file_create, channel: google_drive, idempotency: required, test_mode_behavior: suppress}
   - {operation_id: write_google_sheet, effect_kind: spreadsheet_write, channel: google_sheets, idempotency: required, test_mode_behavior: suppress}
   - {operation_id: append_google_sheet_rows, effect_kind: spreadsheet_append, channel: google_sheets, idempotency: required, test_mode_behavior: suppress}
+  - {operation_id: transition_google_sheet_row, effect_kind: spreadsheet_write, channel: google_sheets, idempotency: required, test_mode_behavior: suppress}
+runtime_grants:
+  resources:
+    project_connection: {scope: owning_extension}
+  mutations:
+    project_connection_upsert: {scope: owning_extension}
 runtime:
   contract_version: extension_host_v2
+  compatibility: {platform_min: 1.7.0}
   extension_contract_v2:
     oauth_providers:
       - provider_id: workspace_oauth
@@ -99,6 +133,7 @@ entrypoint:
 health: {command: [python3, health.py], timeout_seconds: 5}
 ui_manifest: ui/ui_manifest.yaml
 action_manifest: ui/actions/actions.yaml
+query_manifest: ui/queries/queries.yaml
 callbacks:
   - {callback_id: oauth_authorization, purpose: oauth_authorization, methods: [GET], connection_scoped: false}
 python_requirements: []

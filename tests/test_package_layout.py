@@ -12,6 +12,7 @@ GMAIL_MODULES = {
     "operations",
     "search",
     "transport",
+    "trigger",
     "validation",
 }
 DRIVE_MODULES = {
@@ -28,6 +29,7 @@ DRIVE_MODULES = {
 SHEETS_MODULES = {
     "errors",
     "operations",
+    "queue",
     "ranges",
     "reads",
     "transport",
