@@ -12,6 +12,7 @@ GMAIL_MODULES = {
     "operations",
     "search",
     "transport",
+    "trigger",
     "validation",
 }
 DRIVE_MODULES = {

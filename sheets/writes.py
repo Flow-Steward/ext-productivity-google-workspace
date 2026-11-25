@@ -18,7 +18,7 @@ from flowsteward_extension_sdk import (
 from .errors import SheetsExtensionError
 from .ranges import cell_coordinates, column_name, normalize_relative_a1, selected_bounds
 from .reads import selected_sheet
-from .validation import bounded_text, enum, identifier
+from .validation import bounded_text, effect_operation_id, enum, identifier
 
 _MESSAGE_THE_INPUT_DATASET_ROW_COUNT_IS_INVALID = "The input dataset row count is invalid"
 _MESSAGE_INVALID_DATASET_SCHEMA = "invalid dataset schema"
@@ -85,7 +85,7 @@ CREATE_FIELDS = WRITE_COMMON_FIELDS | {
     "destination_folder_id",
     "sheet_title",
 }
-OVERWRITE_FIELDS = WRITE_COMMON_FIELDS | {
+EXISTING_SHEET_WRITE_FIELDS = WRITE_COMMON_FIELDS | {
     "spreadsheet_id",
     "sheet_id",
     "sheet_title",
@@ -104,8 +104,8 @@ APPEND_FIELDS = {
 def validated_write_input(value: Any) -> dict[str, Any]:
     if not isinstance(value, Mapping):
         raise SheetsExtensionError("invalid_payload", "Google Sheets write input is invalid")
-    mode = enum(value.get("mode"), {"create", "overwrite"})
-    allowed = CREATE_FIELDS if mode == "create" else OVERWRITE_FIELDS
+    mode = enum(value.get("mode"), {"create", "overwrite", "update"})
+    allowed = CREATE_FIELDS if mode == "create" else EXISTING_SHEET_WRITE_FIELDS
     if set(value) - allowed:
         raise SheetsExtensionError("invalid_payload", "Google Sheets write input is invalid")
     result = _data_plane(value)
@@ -175,7 +175,7 @@ def _write_google_sheet_from_source(
     normalized: Mapping[str, Any],
     source: RowSource,
 ) -> dict[str, Any]:
-    operation_id = _operation_id(root_payload)
+    operation_id = effect_operation_id(root_payload)
     web_view_link = None
     if normalized["mode"] == "create":
         folder_id = normalized["destination_folder_id"]
@@ -196,14 +196,15 @@ def _write_google_sheet_from_source(
         spreadsheet_id = normalized["spreadsheet_id"]
         metadata = sheets_transport.spreadsheet_metadata(spreadsheet_id)
         sheet = selected_sheet(metadata, normalized)
-        _clear_overwrite_rectangle(
-            sheets_transport,
-            spreadsheet_id,
-            sheet,
-            normalized,
-            incoming_rows=source.declared_rows,
-            incoming_columns=source.declared_columns,
-        )
+        if normalized["mode"] == "overwrite":
+            _clear_overwrite_rectangle(
+                sheets_transport,
+                spreadsheet_id,
+                sheet,
+                normalized,
+                incoming_rows=source.declared_rows,
+                incoming_columns=source.declared_columns,
+            )
     row_count = _write_value_batches(
         sheets_transport,
         spreadsheet_id,
@@ -244,7 +245,7 @@ def _append_google_sheet_rows_from_source(
     normalized: Mapping[str, Any],
     source: RowSource,
 ) -> dict[str, Any]:
-    operation_id = _operation_id(root_payload)
+    operation_id = effect_operation_id(root_payload)
     spreadsheet_id = normalized["spreadsheet_id"]
     metadata = sheets_transport.spreadsheet_metadata(spreadsheet_id)
     sheet = selected_sheet(metadata, normalized)
@@ -564,17 +565,6 @@ def _staged_row_source(
     except Exception:
         staged.close()
         raise
-
-
-def _operation_id(payload: Mapping[str, Any]) -> str:
-    runtime = payload.get("runtime_context")
-    value = runtime.get("external_effect_id") if isinstance(runtime, Mapping) else None
-    text = value.strip() if isinstance(value, str) else ""
-    if not text or len(text) > 128 or any(ord(char) < 32 or ord(char) == 127 for char in text):
-        raise SheetsExtensionError(
-            "invalid_payload", "A stable host external-effect operation ID is required"
-        )
-    return text
 
 
 def _created_spreadsheet(value: Any) -> tuple[str, str | None]:

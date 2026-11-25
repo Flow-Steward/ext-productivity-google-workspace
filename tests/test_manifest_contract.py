@@ -68,6 +68,17 @@ DRIVE_SHEETS_FIELDS = {
         "dataset_handle",
         "inline_rows",
     },
+    "transition_google_sheet_row": {
+        "connection_ref",
+        "mode",
+        "spreadsheet_id",
+        "sheet_id",
+        "sheet_title",
+        "table_range",
+        "status_column",
+        "status_cell",
+        "claim_marker",
+    },
 }
 
 
@@ -113,7 +124,12 @@ def test_static_contract_surfaces_match_closed_runtime_registry_exactly() -> Non
     expected = set(OPERATION_FIELDS) | set(DRIVE_SHEETS_FIELDS)
 
     assert set(operation_rows) == expected
-    assert set(action_rows) == expected | {"verify_google_identity", "get_picker_bootstrap"}
+    assert set(action_rows) == expected | {
+        "verify_google_identity",
+        "get_picker_bootstrap",
+        "save_gmail_trigger_settings",
+        "poll_gmail_inbox",
+    }
     assert action_rows["verify_google_identity"]["workflow_visible"] is False
     assert action_rows["get_picker_bootstrap"] == {
         "action_id": "get_picker_bootstrap",
@@ -131,6 +147,7 @@ def test_static_contract_surfaces_match_closed_runtime_registry_exactly() -> Non
         "upload_drive_file",
         "write_google_sheet",
         "append_google_sheet_rows",
+        "transition_google_sheet_row",
     }
     queries = _yaml("contracts/resource_queries.yaml")["queries"]
     assert {row["query_id"] for row in queries} == {
@@ -148,6 +165,8 @@ def test_static_contract_surfaces_match_closed_runtime_registry_exactly() -> Non
         "gmail_labels",
         "gmail_move_labels",
         *DRIVE_QUERY_IDS,
+        "poll_gmail_inbox",
+        "get_gmail_trigger_settings",
     }
     declared_errors = set().union(*(set(row["error_codes"]) for row in operations))
     assert declared_errors == (
@@ -170,6 +189,7 @@ def test_static_contract_surfaces_match_closed_runtime_registry_exactly() -> Non
         "upload_drive_file",
         "write_google_sheet",
         "append_google_sheet_rows",
+        "transition_google_sheet_row",
     }
     assert {
         action_id
@@ -342,6 +362,7 @@ def test_setup_guide_is_the_default_google_workspace_page() -> None:
     assert pages == [
         {"ref": "pages/setup-guide.yaml"},
         {"ref": "pages/gmail.yaml"},
+        {"ref": "pages/gmail-triggers.yaml"},
         {"ref": "pages/drive.yaml"},
         {"ref": "pages/sheets.yaml"},
         {"ref": "pages/support.yaml"},
@@ -376,7 +397,9 @@ def test_drive_and_sheets_static_contracts_publish_exact_boundaries() -> None:
     }
 
     assert set(DRIVE_SHEETS_FIELDS) == set(DRIVE_OPERATION_IDS | SHEETS_OPERATION_IDS)
-    assert set(connections["google_gmail_account"]["capabilities"]) == set(OPERATION_FIELDS)
+    assert set(connections["google_gmail_account"]["capabilities"]) == set(OPERATION_FIELDS) | {
+        "poll_gmail_inbox"
+    }
     assert set(connections["google_drive_account"]["capabilities"]) == set(DRIVE_OPERATION_IDS)
     assert set(connections["google_sheets_account"]["capabilities"]) == set(SHEETS_OPERATION_IDS)
     assert set(policies) == {
@@ -388,7 +411,13 @@ def test_drive_and_sheets_static_contracts_publish_exact_boundaries() -> None:
         "append_google_sheet_rows",
     }
     assert {row["operation_id"] for row in manifest["external_effects"]} == (
-        set(MUTATIONS) | {"upload_drive_file", "write_google_sheet", "append_google_sheet_rows"}
+        set(MUTATIONS)
+        | {
+            "upload_drive_file",
+            "write_google_sheet",
+            "append_google_sheet_rows",
+            "transition_google_sheet_row",
+        }
     )
     assert manifest["entrypoint"]["timeout_policy"] == {
         "env": "FS_EXTENSION_OPERATION_TIMEOUT_SECONDS",
@@ -397,7 +426,10 @@ def test_drive_and_sheets_static_contracts_publish_exact_boundaries() -> None:
         "maximum_seconds": 3600,
         "headroom_seconds": 30,
     }
-    assert manifest["version"] == "0.3.7"
+    assert manifest["version"] == "0.4.3"
+    write_inputs = operations["write_google_sheet"]["inputs"]
+    mode = next(item for item in write_inputs if item["name"] == "mode")
+    assert mode["schema"]["enum"] == ["create", "overwrite", "update"]
     assert set(manifest["required_scopes"]) == {
         "extension:invoke",
         "artifact:read",
@@ -472,7 +504,18 @@ def _assert_closed_schemas(operation: dict) -> None:
             schema = field.get("schema")
             if field["value_type"] in {"object", "array"}:
                 assert isinstance(schema, dict), (operation["operation_id"], group, field["name"])
-                _assert_recursive_object_closure(schema)
+                if (
+                    operation["operation_id"] == "transition_google_sheet_row"
+                    and group == "outputs"
+                    and field["name"] == "row"
+                ):
+                    # The sheet header supplies the keys. Cell values still have a closed type.
+                    assert schema == {
+                        "type": "object",
+                        "additionalProperties": {"type": ["string", "null"]},
+                    }
+                else:
+                    _assert_recursive_object_closure(schema)
 
 
 def _assert_recursive_object_closure(schema: dict) -> None:
@@ -581,8 +624,22 @@ def test_workspace_ui_has_exact_service_tabs_and_operator_guidance() -> None:
     page_refs = [row["ref"] for row in ui_manifest["pages"]]
     pages = [_yaml(f"ui/{ref}") for ref in page_refs]
 
-    assert [page["page_id"] for page in pages] == ["setup-guide", "gmail", "drive", "sheets", "support"]
-    assert [page["title"] for page in pages] == ["Setup guide", "Gmail", "Drive", "Sheets", "Support"]
+    assert [page["page_id"] for page in pages] == [
+        "setup-guide",
+        "gmail",
+        "gmail-triggers",
+        "drive",
+        "sheets",
+        "support",
+    ]
+    assert [page["title"] for page in pages] == [
+        "Setup guide",
+        "Gmail",
+        "Gmail triggers",
+        "Drive",
+        "Sheets",
+        "Support",
+    ]
     combined = "\n".join(
         str(component.get("body") or "")
         for page in pages

@@ -126,9 +126,9 @@ forms:
       - {name: range, widget_type: text, label: Relative A1 range, help_text: "A1 range relative to the selected sheet, without a sheet prefix. Leave empty for the supported default read range.", placeholder: "A1:D100"}
       - {name: header_mode, widget_type: select, label: Header mode, options: [{label: First row, value: first_row}, {label: No header, value: none}], help_text: "first_row uses the first row as dataset field names; none reads rows without treating the first row as a header."}
   - operation_id: write_google_sheet
-    title: "Create or overwrite Google Sheet"
+    title: "Write Google Sheet"
     fields:
-      - {name: mode, widget_type: select, label: Mode (required), required: true, options: [{label: Create spreadsheet, value: create}, {label: Overwrite selected sheet range, value: overwrite}], help_text: "create makes a new spreadsheet; overwrite writes to the selected existing sheet starting at start_cell."}
+      - {name: mode, widget_type: select, label: Mode (required), required: true, options: [{label: Create spreadsheet, value: create}, {label: Clear and overwrite, value: overwrite}, {label: Update cells, value: update}], help_text: "create makes a new spreadsheet; overwrite clears the existing block before writing; update writes only the supplied cells starting at start_cell."}
       - {name: dataset_handle, widget_type: dataset_picker, label: Input dataset, help_text: Choose exactly one input dataset or inline rows.}
       - {name: inline_rows, widget_type: json, label: Inline rows, help_text: Choose exactly one input dataset or inline rows; maximum 100 rows., placeholder: "[[\"Order\",\"Total\"],[\"A-100\",42.5]]"}
       - {name: start_cell, widget_type: text, label: Start cell, help_text: "Single A1 cell relative to the selected sheet. Defaults to A1.", placeholder: "A1"}
@@ -156,7 +156,6 @@ forms:
         widget_type: resource_picker
         resource_query_id: google_spreadsheets
         label: Spreadsheet
-        depends_on: {mode: overwrite}
         external_resource_picker:
           allowed_script_origins: *google_picker_script_origins
           allowed_connect_origins: *google_picker_connect_origins
@@ -170,9 +169,9 @@ forms:
           scripts: *google_picker_scripts
           target_component_id: workflow_parameter_form
           selection: {maximum: 1, fields: [{source: id, target: spreadsheet_id, required: true, max_length: 1024}]}
-        help_text: "Select an app-authorized spreadsheet with Google Picker or map its ID; use this for overwrite or append operations."
-      - {name: sheet_id, widget_type: number, label: Sheet ID, depends_on: {mode: overwrite}, help_text: "Numeric sheet tab ID, zero or greater. Provide exactly one of sheet_id or sheet_title for an existing sheet."}
-      - {name: sheet_title, widget_type: text, label: Sheet title, depends_on: {mode: overwrite}, help_text: "Exact sheet tab title. Provide exactly one of sheet_title or sheet_id for an existing sheet."}
+        help_text: "Select an app-authorized spreadsheet with Google Picker or map its ID; use this for overwrite and update modes."
+      - {name: sheet_id, widget_type: number, label: Sheet ID, help_text: "Numeric sheet tab ID, zero or greater. Provide exactly one of sheet_id or sheet_title for an existing sheet."}
+      - {name: sheet_title, widget_type: text, label: Sheet title, help_text: "Exact sheet tab title. Provide exactly one of sheet_title or sheet_id for an existing sheet."}
   - operation_id: append_google_sheet_rows
     title: Append Google Sheet rows
     fields:
@@ -200,3 +199,14 @@ forms:
       - {name: table_range, widget_type: text, label: Table range (required), required: true, help_text: "Relative A1 range identifying the logical table after which rows are appended.", placeholder: "A:D"}
       - {name: dataset_handle, widget_type: dataset_picker, label: Input dataset, help_text: Choose exactly one input dataset or inline rows.}
       - {name: inline_rows, widget_type: json, label: Inline rows, help_text: Choose exactly one input dataset or inline rows; maximum 100 rows., placeholder: "[[\"Order\",\"Total\"],[\"A-100\",42.5]]"}
+  - operation_id: transition_google_sheet_row
+    title: Claim or complete a Google Sheet row
+    fields:
+      - {name: mode, widget_type: select, label: Mode, required: true, options: [{label: Claim Ready row, value: claim}, {label: Complete claimed row, value: complete}]}
+      - {name: spreadsheet_id, widget_type: text, label: Spreadsheet ID, required: true, help_text: Select or map the ID of the same spreadsheet used by the Read Google Sheet step.}
+      - {name: sheet_id, widget_type: number, label: Sheet ID, help_text: Enter exactly one of Sheet ID or Sheet title.}
+      - {name: sheet_title, widget_type: text, label: Sheet title, help_text: Enter exactly one of Sheet ID or Sheet title.}
+      - {name: table_range, widget_type: text, label: Table range, required: true, placeholder: "A1:D100", help_text: Include the header row and every row that can participate in a sort.}
+      - {name: status_column, widget_type: text, label: Status column, required: true, placeholder: "B"}
+      - {name: status_cell, widget_type: text, label: Candidate status cell, depends_on: {mode: claim}, placeholder: "B2", help_text: Map the candidate cell in the status column.}
+      - {name: claim_marker, widget_type: text, label: Claim marker, depends_on: {mode: complete}, help_text: Map the marker returned by the claim step.}

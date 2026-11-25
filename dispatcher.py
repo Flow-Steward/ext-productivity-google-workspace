@@ -12,6 +12,7 @@ from drive.operations import OPERATION_IDS as DRIVE_OPERATION_IDS
 from drive.operations import handle_runtime as handle_drive_runtime
 from gmail.operations import LABEL_QUERY_IDS
 from gmail.operations import handle_runtime as handle_gmail_runtime
+from gmail.trigger import POLL_ACTION_ID, STATUS_QUERY_ID, poll_inbox, trigger_settings
 from gmail.validation import OPERATION_FIELDS
 from identity import handle_verify_identity
 from picker import handle_picker_bootstrap
@@ -21,6 +22,8 @@ from sheets.operations import handle_runtime as handle_sheets_runtime
 RuntimeHandler = Callable[[dict[str, Any]], dict[str, Any]]
 
 OPERATION_REGISTRY = {
+    POLL_ACTION_ID: "gmail_poll",
+    STATUS_QUERY_ID: "gmail_trigger_settings",
     "verify_google_identity": "identity",
     "get_picker_bootstrap": "picker",
     **dict.fromkeys(OPERATION_FIELDS, "gmail"),
@@ -30,6 +33,8 @@ OPERATION_REGISTRY = {
     **dict.fromkeys(SHEETS_OPERATION_IDS, "sheets"),
 }
 SERVICE_HANDLERS: dict[str, RuntimeHandler] = {
+    "gmail_poll": poll_inbox,
+    "gmail_trigger_settings": trigger_settings,
     "identity": handle_verify_identity,
     "picker": handle_picker_bootstrap,
     "gmail": handle_gmail_runtime,

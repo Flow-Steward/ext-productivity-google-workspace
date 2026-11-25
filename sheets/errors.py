@@ -20,6 +20,7 @@ SAFE_ERROR_CODES = frozenset(
         "network_failure",
         "provider_unavailable",
         "response_too_large",
+        "sheet_row_claim_conflict",
         "sheet_too_large",
         "timeout_unknown",
     }

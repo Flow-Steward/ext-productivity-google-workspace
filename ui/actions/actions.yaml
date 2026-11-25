@@ -17,6 +17,46 @@ actions:
     parameters: []
     result_fields: [client_id, developer_key, app_id, origin, email_hint, scope]
     error_codes: [invalid_payload, provider_unavailable]
+  - action_id: save_gmail_trigger_settings
+    title: Save Gmail trigger settings
+    description: Turn new email triggers on or off for the selected Gmail account.
+    workflow_visible: false
+    command_type: invoke_extension_action
+    required_scopes: [extension:invoke]
+    connection_type_ids: [google_gmail_account]
+    handler:
+      mode: platform
+      operation: project_connection_ingress_patch
+      config:
+        connection_type_ids: [google_gmail_account]
+        fields: [gmail_trigger_mode]
+    mutates_platform: true
+    parameters:
+      - {name: gmail_trigger_mode, type: string, required: true}
+    result_fields: [message, values.gmail_trigger_mode]
+    error_codes: [invalid_payload, invalid_connection, project_context_required, project_connection_storage_unavailable]
+  - action_id: poll_gmail_inbox
+    title: Check Gmail for new email
+    description: Check one opted-in Gmail Inbox and emit events for newly received messages.
+    workflow_visible: false
+    command_type: invoke_extension_action
+    required_scopes: [extension:invoke]
+    connection_type_ids: [google_gmail_account]
+    handler:
+      mode: extension
+      config:
+        host_mutations: [project_connection_upsert]
+    contract:
+      serialization: {resource: gmail_sync}
+      background:
+        kind: connection_poll
+        interval_field: gmail_poll_interval_seconds
+        mode_field: gmail_trigger_mode
+        transport_policy: webhook_preferred
+    mutates_platform: true
+    parameters: []
+    result_fields: [result.status, result.processed_updates]
+    error_codes: [invalid_connection, authorization_required, gmail_api_disabled, mailbox_unusable, rate_limited, provider_unavailable, network_failure, response_too_large, internal_error, operation_serialization_unavailable, operation_serialization_busy]
   - action_id: test_connection
     title: Test Gmail connection
     required_scopes: [extension:invoke]
@@ -146,17 +186,17 @@ actions:
     error_codes: [invalid_payload, invalid_connection, google_scope_required, google_workspace_admin_approval_required, google_reauthorization_required, google_service_not_enabled, google_api_disabled, google_rate_limited, google_quota_exceeded, google_file_not_found, google_sheet_not_found, google_sheet_ambiguous, sheet_too_large, dataset_output_unavailable, network_failure, provider_unavailable, response_too_large, internal_error]
     description: "Stream one selected sheet range into a bounded NDJSON dataset grant. Create and authorize a Google Sheets project connection, then select it for this step. Select existing files and folders with Google Picker so the app can access them. Example: Read A1:D100 on the Orders sheet with the first row used as field names."
   - action_id: write_google_sheet
-    title: "Create or overwrite Google Sheet"
+    title: "Write Google Sheet"
     required_scopes: [extension:invoke, artifact:read]
     handler: {mode: extension}
     command_type: invoke_extension_action
     mutates_platform: true
     workflow_visible: true
     test_mode_behavior: suppress
-    parameters: [{name: connection_ref, type: connection_ref, required: true, description: "Select the saved project connection for this operation. Credentials belong in the connection, not in the step input."}, {name: mode, type: string, required: true, description: "create makes a new spreadsheet; overwrite writes to the selected existing sheet starting at start_cell."}, {name: dataset_handle, type: dataset_handle, required: false}, {name: inline_rows, type: array, required: false, description: "JSON array of row arrays, up to 100 rows and 100 cells per row. Cells may be strings, numbers, booleans or null. Supply this or dataset_handle, never both."}, {name: start_cell, type: string, required: false, description: "Single A1 cell relative to the selected sheet. Defaults to A1."}, {name: spreadsheet_title, type: string, required: false, description: "Name of the spreadsheet to create in create mode."}, {name: destination_folder_id, type: string, required: false, description: "Select an app-authorized destination folder with Google Picker or map an authorized folder ID."}, {name: spreadsheet_id, type: string, required: false}, {name: sheet_id, type: integer, required: false}, {name: sheet_title, type: string, required: false}]
+    parameters: [{name: connection_ref, type: connection_ref, required: true, description: "Select the saved project connection for this operation. Credentials belong in the connection, not in the step input."}, {name: mode, type: string, required: true, description: "create makes a new spreadsheet; overwrite clears the existing block before writing; update writes only the supplied cells starting at start_cell."}, {name: dataset_handle, type: dataset_handle, required: false}, {name: inline_rows, type: array, required: false, description: "JSON array of row arrays, up to 100 rows and 100 cells per row. Cells may be strings, numbers, booleans or null. Supply this or dataset_handle, never both."}, {name: start_cell, type: string, required: false, description: "Single A1 cell relative to the selected sheet. Defaults to A1."}, {name: spreadsheet_title, type: string, required: false, description: "Name of the spreadsheet to create in create mode."}, {name: destination_folder_id, type: string, required: false, description: "Select an app-authorized destination folder with Google Picker or map an authorized folder ID."}, {name: spreadsheet_id, type: string, required: false}, {name: sheet_id, type: integer, required: false}, {name: sheet_title, type: string, required: false}]
     result_fields: [spreadsheet_id, sheet_id, web_view_link, row_count, column_count]
     error_codes: [invalid_payload, invalid_connection, google_scope_required, google_workspace_admin_approval_required, google_reauthorization_required, google_service_not_enabled, google_api_disabled, google_rate_limited, google_quota_exceeded, google_file_not_found, google_sheet_not_found, google_sheet_ambiguous, sheet_too_large, dataset_input_unavailable, network_failure, provider_unavailable, response_too_large, timeout_unknown, internal_error]
-    description: "Create a spreadsheet or overwrite one selected sheet rectangle with RAW values. Create and authorize a Google Sheets project connection, then select it for this step. Select existing files and folders with Google Picker so the app can access them. Example: Create a report spreadsheet from inline_rows=[[\"Order\",\"Total\"],[\"A-100\",42.5]], or overwrite a selected rectangle starting at A1."
+    description: "Create a spreadsheet, clear and overwrite a block, or update only the supplied cells starting at start_cell, using RAW values. Create and authorize a Google Sheets project connection, then select it for this step. Select existing files and folders with Google Picker so the app can access them. Example: Set B2 to Done with mode=update."
   - action_id: append_google_sheet_rows
     title: Append Google Sheet rows
     required_scopes: [extension:invoke, artifact:read]
@@ -170,3 +210,25 @@ actions:
     result_fields: [spreadsheet_id, sheet_id, appended_range, row_count, column_count]
     error_codes: [invalid_payload, invalid_connection, google_scope_required, google_workspace_admin_approval_required, google_reauthorization_required, google_service_not_enabled, google_api_disabled, google_rate_limited, google_quota_exceeded, google_file_not_found, google_sheet_not_found, google_sheet_ambiguous, sheet_too_large, dataset_input_unavailable, network_failure, provider_unavailable, response_too_large, timeout_unknown, internal_error]
     description: "Append RAW rows after one selected logical table using a stable chunk marker. Create and authorize a Google Sheets project connection, then select it for this step. Select existing files and folders with Google Picker so the app can access them. Example: Append processed order rows after the logical table in A:D without replacing its existing rows."
+  - action_id: transition_google_sheet_row
+    title: Claim or complete a Google Sheet row
+    required_scopes: [extension:invoke]
+    handler: {mode: extension}
+    command_type: invoke_extension_action
+    mutates_platform: true
+    workflow_visible: true
+    test_mode_behavior: suppress
+    parameters:
+      - {name: connection_ref, type: connection_ref, required: true}
+      - {name: mode, type: string, required: true}
+      - {name: spreadsheet_id, type: string, required: true}
+      - {name: sheet_id, type: integer, required: false}
+      - {name: sheet_title, type: string, required: false}
+      - {name: table_range, type: string, required: true}
+      - {name: status_column, type: string, required: true}
+      - {name: status_cell, type: string, required: false}
+      - {name: claim_marker, type: string, required: false}
+    contract: {serialization: {key_fields: [spreadsheet_id]}}
+    result_fields: [changed, claim_marker, row]
+    error_codes: [invalid_payload, invalid_connection, google_scope_required, google_workspace_admin_approval_required, google_reauthorization_required, google_service_not_enabled, google_api_disabled, google_rate_limited, google_quota_exceeded, google_file_not_found, google_sheet_not_found, google_sheet_ambiguous, sheet_row_claim_conflict, network_failure, provider_unavailable, response_too_large, timeout_unknown, internal_error]
+    description: "Claim a Ready row and return its data and marker. After processing, complete the claim to write Done in the status column, even if the full row was sorted."

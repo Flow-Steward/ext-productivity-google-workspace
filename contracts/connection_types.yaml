@@ -13,7 +13,14 @@ connection_types:
       type: object
       additionalProperties: false
       properties: {access_token: {type: string}}
-    capabilities: [test_connection, list_labels, search_messages, get_message, get_attachment, set_message_flags, move_messages, delete_messages]
+    ingress_schema:
+      type: object
+      properties:
+        gmail_trigger_mode: {type: string, enum: ['off', polling], default: 'off'}
+        gmail_poll_interval_seconds: {type: integer, minimum: 30, default: 60}
+        last_inbound_sync_at: {type: string}
+        gmail_sync: {type: object}
+    capabilities: [test_connection, list_labels, search_messages, get_message, get_attachment, set_message_flags, move_messages, delete_messages, poll_gmail_inbox]
   - connection_type_id: google_drive_account
     display_name: Google Drive account
     description: One Google account authorized only for Drive operations in this project.
@@ -43,4 +50,4 @@ connection_types:
       type: object
       additionalProperties: false
       properties: {access_token: {type: string}}
-    capabilities: [read_google_sheet, write_google_sheet, append_google_sheet_rows]
+    capabilities: [read_google_sheet, write_google_sheet, append_google_sheet_rows, transition_google_sheet_row]

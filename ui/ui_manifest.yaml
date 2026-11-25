@@ -2,6 +2,7 @@ version: "1"
 pages:
   - ref: pages/setup-guide.yaml
   - ref: pages/gmail.yaml
+  - ref: pages/gmail-triggers.yaml
   - ref: pages/drive.yaml
   - ref: pages/sheets.yaml
   - ref: pages/support.yaml

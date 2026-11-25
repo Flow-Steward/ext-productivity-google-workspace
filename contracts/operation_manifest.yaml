@@ -204,15 +204,15 @@ operations:
     result_fields: [result.dataset_handle, result.row_count, result.column_count, result.schema, result.preview, result.spreadsheet_id, result.sheet_id]
     error_codes: [invalid_payload, invalid_connection, google_scope_required, google_workspace_admin_approval_required, google_reauthorization_required, google_service_not_enabled, google_api_disabled, google_rate_limited, google_quota_exceeded, google_file_not_found, google_sheet_not_found, google_sheet_ambiguous, sheet_too_large, dataset_output_unavailable, network_failure, provider_unavailable, response_too_large, internal_error]
   - operation_id: write_google_sheet
-    display_name: "Create or overwrite Google Sheet"
-    description: "Create a spreadsheet or overwrite one selected sheet rectangle with RAW values. Create and authorize a Google Sheets project connection, then select it for this step. Select existing files and folders with Google Picker so the app can access them. Example: Create a report spreadsheet from inline_rows=[[\"Order\",\"Total\"],[\"A-100\",42.5]], or overwrite a selected rectangle starting at A1."
+    display_name: "Write Google Sheet"
+    description: "Create a spreadsheet, clear and overwrite a block, or update only the supplied cells starting at start_cell, using RAW values. Create and authorize a Google Sheets project connection, then select it for this step. Select existing files and folders with Google Picker so the app can access them. Example: Set B2 to Done with mode=update."
     operation_kind: action
     category: spreadsheet
     connection_type_ids: [google_sheets_account]
     required_oauth_scopes: [https://www.googleapis.com/auth/drive.file]
     inputs:
       - {name: connection_ref, value_type: connection_ref, required: true}
-      - {name: mode, value_type: text, required: true, schema: {type: string, enum: [create, overwrite]}, description: "create makes a new spreadsheet; overwrite writes to the selected existing sheet starting at start_cell."}
+      - {name: mode, value_type: text, required: true, schema: {type: string, enum: [create, overwrite, update]}, description: "create makes a new spreadsheet; overwrite clears the existing block before writing; update writes only the supplied cells starting at start_cell."}
       - {name: dataset_handle, value_type: dataset_handle, required: false}
       - name: inline_rows
         value_type: array
@@ -260,3 +260,26 @@ operations:
       - {name: column_count, value_type: integer}
     result_fields: [result.spreadsheet_id, result.sheet_id, result.appended_range, result.row_count, result.column_count]
     error_codes: [invalid_payload, invalid_connection, google_scope_required, google_workspace_admin_approval_required, google_reauthorization_required, google_service_not_enabled, google_api_disabled, google_rate_limited, google_quota_exceeded, google_file_not_found, google_sheet_not_found, google_sheet_ambiguous, sheet_too_large, dataset_input_unavailable, network_failure, provider_unavailable, response_too_large, timeout_unknown, internal_error]
+  - operation_id: transition_google_sheet_row
+    display_name: Claim or complete a Google Sheet row
+    description: "Claim a Ready row and return its data and marker. After processing, complete the claim to write Done in the status column, even if the full row was sorted."
+    operation_kind: action
+    category: spreadsheet
+    connection_type_ids: [google_sheets_account]
+    required_oauth_scopes: [https://www.googleapis.com/auth/drive.file]
+    inputs:
+      - {name: connection_ref, value_type: connection_ref, required: true}
+      - {name: mode, value_type: text, required: true, schema: {type: string, enum: [claim, complete]}}
+      - {name: spreadsheet_id, value_type: text, required: true, schema: {type: string, minLength: 1, maxLength: 512}}
+      - {name: sheet_id, value_type: integer, required: false, schema: {type: integer, minimum: 0}}
+      - {name: sheet_title, value_type: text, required: false, schema: {type: string, minLength: 1, maxLength: 100}}
+      - {name: table_range, value_type: text, required: true, schema: {type: string, minLength: 1, maxLength: 512}, description: "Bounded A1 range including the header and all rows that may be sorted, for example A1:D100."}
+      - {name: status_column, value_type: text, required: true, schema: {type: string, pattern: "^[A-Za-z]{1,3}$"}, description: "Column letter inside the table, for example B."}
+      - {name: status_cell, value_type: text, required: false, schema: {type: string, minLength: 1, maxLength: 512}, description: "Candidate status cell for claim mode, for example B2."}
+      - {name: claim_marker, value_type: text, required: false, schema: {type: string, minLength: 1, maxLength: 64}, description: "Map the marker from the claim step in complete mode."}
+    outputs:
+      - {name: changed, value_type: boolean}
+      - {name: claim_marker, value_type: text}
+      - {name: row, value_type: object, schema: {type: object, additionalProperties: {type: [string, "null"]}}}
+    result_fields: [result.changed, result.claim_marker, result.row]
+    error_codes: [invalid_payload, invalid_connection, google_scope_required, google_workspace_admin_approval_required, google_reauthorization_required, google_service_not_enabled, google_api_disabled, google_rate_limited, google_quota_exceeded, google_file_not_found, google_sheet_not_found, google_sheet_ambiguous, sheet_row_claim_conflict, network_failure, provider_unavailable, response_too_large, timeout_unknown, internal_error]

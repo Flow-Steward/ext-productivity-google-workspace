@@ -93,3 +93,14 @@ def enum(value: Any, allowed: set[str]) -> str:
     if text not in allowed:
         raise SheetsExtensionError("invalid_payload", "Invalid enum value")
     return text
+
+
+def effect_operation_id(payload: Mapping[str, Any]) -> str:
+    runtime = payload.get("runtime_context")
+    value = runtime.get("external_effect_id") if isinstance(runtime, Mapping) else None
+    text = value.strip() if isinstance(value, str) else ""
+    if not text or len(text) > 128 or any(ord(char) < 32 or ord(char) == 127 for char in text):
+        raise SheetsExtensionError(
+            "invalid_payload", "A stable host external-effect operation ID is required"
+        )
+    return text

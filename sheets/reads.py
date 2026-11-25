@@ -230,7 +230,7 @@ def _dataset_chunks(
     byte_limit: int,
 ):
     for provider_range in provider_ranges:
-        page = _values_page(transport.values_get(spreadsheet_id, provider_range))
+        page = values_page(transport.values_get(spreadsheet_id, provider_range))
         for values in page:
             if len(values) > state["max_columns"]:
                 raise SheetsExtensionError(
@@ -238,7 +238,7 @@ def _dataset_chunks(
                     "Google Sheets returned values outside the requested range",
                 )
             if not state["header_consumed"]:
-                state["headers"] = _headers(values)
+                state["headers"] = column_headers(values)
                 state["column_count"] = len(values)
                 state["header_consumed"] = True
                 continue
@@ -267,7 +267,7 @@ def _dataset_chunks(
             yield encoded
 
 
-def _values_page(value: Any) -> list[list[str | None]]:
+def values_page(value: Any) -> list[list[str | None]]:
     if not isinstance(value, Mapping) or set(value) - {"range", "majorDimension", "values"}:
         raise SheetsExtensionError(
             "provider_unavailable", _MESSAGE_GOOGLE_SHEETS_RETURNED_INVALID_VALUES
@@ -304,7 +304,7 @@ def _values_page(value: Any) -> list[list[str | None]]:
     return result
 
 
-def _headers(values: list[str | None]) -> list[str]:
+def column_headers(values: list[str | None]) -> list[str]:
     result: list[str] = []
     used: set[str] = set()
     for index, value in enumerate(values, start=1):

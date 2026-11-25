@@ -8,7 +8,7 @@ Setup requires your own Google Cloud OAuth web application, enabled service APIs
 
 ## Connection model
 
-This is extension version 0.3.7. OAuth configuration and every authorization are project-scoped.
+This is extension version 0.4.1. It requires Flow Steward Core 0.9.24 or later. OAuth configuration and every authorization are project-scoped.
 `google_gmail_account`, `google_drive_account`, and `google_sheets_account` are
 separate connections with separate tokens and grants. No default Google account exists:
 every workflow operation requires an explicit compatible connection.
@@ -134,10 +134,14 @@ Sheets exposes exactly:
 
 - `read_google_sheet` — reads one exact sheet selector and relative A1 range into an
   NDJSON dataset grant;
-- `write_google_sheet` — creates a spreadsheet or clears and overwrites one selected
-  rectangle; and
+- `write_google_sheet` — creates a spreadsheet, clears and overwrites a range, or
+  updates only the supplied cells from `start_cell`. Use `mode: update`,
+  `start_cell: B2` and `inline_rows: [["Done"]]` to change a single status cell.
 - `append_google_sheet_rows` — appends after one selected table using a stable chunk
   marker.
+
+- `transition_google_sheet_row`: claim a `Ready` row for processing and mark the
+  claimed row `Done` after success, including after sorting whole rows.
 
 Sheets writes use `RAW`, so formula-looking strings are stored as data rather than
 being evaluated through `USER_ENTERED`. Reads cap preview at 100 rows. Full reads are
@@ -149,6 +153,45 @@ grant. Operators may change the shared producer/consumer ceiling with
 changes that deadline while the host retains bounded reconciliation headroom. Serialized
 Sheets value batches are at most 2 MiB. File and dataset bodies never enter subprocess
 JSON or workflow state.
+
+### Scheduled processing without an ID column
+
+Use **Claim or complete a Google Sheet row** with a bounded table range that
+includes the header and all rows that can be sorted, for example `A1:D100`.
+Give both steps the same tab, range, and status column.
+
+1. Scan for `Ready` rows and pass a candidate status cell such as `B2` to
+   `mode: claim`. The action conditionally replaces `Ready` with a unique
+   `Processing [FS …]` value in that cell. If `changed` is false, skip the
+   candidate. Process the `row` returned by the action so the data always
+   belongs to the row that was actually claimed.
+2. On success, pass the returned `claim_marker` to `mode: complete`. Google
+   Sheets replaces the exact marker in the status column with `Done`. The
+   status cell can move with its row during a sort.
+
+Sort the complete table rows, including their status cells, and keep the header
+outside the sort. Leave processing markers unchanged until the workflow
+completes. Allow the temporary value in status validation if the column uses a
+dropdown. A failed business step leaves its claim visible for investigation.
+Return that status to `Ready` only after determining that the row can safely be
+retried.
+
+### New Gmail email trigger
+
+1. Connect a Gmail account in the **Gmail** tab.
+2. Open **Gmail triggers** and select the account. Add **New Gmail email** to an enabled workflow and enter the connection ID displayed on the tab. Leave the sender blank to accept mail from any sender.
+3. On **Gmail triggers**, select **On** and save. Select **Off** and save to stop checking the account.
+
+The trigger is off for each connection until you enable it. Flow Steward checks
+Gmail roughly once a minute. Its first check establishes the starting position.
+Mail from before that check or while disabled is skipped. Messages removed from
+the Inbox before processing are skipped as well. If Gmail expires the saved
+history position, Flow Steward checks the Inbox for messages since its last
+checkpoint and then resumes checking history.
+
+Each event provides the connection ID, message ID, thread ID, sender, subject
+and received time. Pass the message ID to **Read Gmail message** with the same
+connection to retrieve the body and attachment metadata.
 
 Gmail behavior remains compatible: multiple mailbox connections are explicit, search
 preserves provider order, cursor contents are never logged, labels retain Gmail
