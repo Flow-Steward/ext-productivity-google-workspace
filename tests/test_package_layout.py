@@ -29,6 +29,7 @@ DRIVE_MODULES = {
 SHEETS_MODULES = {
     "errors",
     "operations",
+    "queue",
     "ranges",
     "reads",
     "transport",
